@@ -222,21 +222,27 @@ const forgotPassword = asyncfn(async (req, res, next) => {    //=>
     }
 });
 const resetPassword = asyncfn(async (req, res, next) => {    //=>
-    //1-get user base on the token
-    const hashedToken = crypto.createHash('sha256').update(req.body.code).digest('hex');
-    //2-if token has not expired, there is user ,set the now password
-    const user = await User.findOne({ PasswordResetToken: hashedToken, PasswordResetExpires: { $gt: Date.now() } });
+
+    const email = req.body.email;
+    const user = await User.findOne({ email });
     if (!user) {
+        const error = apperror.create('user not found', 404, httpstatus.Fail);
+        return next(error);
+    }
+
+    const resetToken = req.body.code;
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    if (user.PasswordResetToken !== hashedToken || user.PasswordResetExpires < Date.now()) {
         const error = apperror.create('the code is invalid or has expired', 404, httpstatus.Fail);
         return next(error);
     }
+
     user.code = req.body.code;
     user.password = req.body.password;
     user.passwordConfirm = req.body.passwordConfirm;
     user.PasswordResetToken = undefined;
     user.PasswordResetExpires = undefined;
     await user.save();
-    //4-log the user in , jwt
     const token = await generateJWT({ id: user._id });
     return res.status(201).json({ status: httpstatus.suc, data: { token } });
 });
